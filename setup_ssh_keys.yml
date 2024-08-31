@@ -1,0 +1,55 @@
+---
+- name: Set up SSH keys for remote hosts
+  hosts: all
+  gather_facts: no
+  vars_prompt:
+    - name: "ansible_ssh_pass"
+      prompt: "Enter SSH password"
+      private: yes
+  tasks:
+    - name: Ensure SSH key pair exists
+      local_action: 
+        module: openssh_keypair
+        path: ~/.ssh/id_rsa
+      run_once: true
+    
+    - name: Remove known_hosts entry for each host
+      command: ssh-keygen -R {{ hostvars[inventory_hostname].ansible_host }}
+      ignore_errors: yes
+    
+    - name: Add known_hosts entry for each host
+      command: ssh-keyscan -H {{ hostvars[inventory_hostname].ansible_host }} >> ~/.ssh/known_hosts
+
+    - name: Read the public key
+      local_action: 
+        module: slurp
+        src: ~/.ssh/id_rsa.pub
+      register: ssh_pub_key
+      run_once: true
+
+    - name: Ensure ~/.ssh directory exists
+      ansible.builtin.file:
+        path: ~/.ssh
+        state: directory
+        mode: '0700'
+
+    - name: Add public key to authorized_keys
+      ansible.posix.authorized_key:
+        user: "{{ ansible_user }}"
+        state: present
+        key: "{{ item }}"
+      with_items: 
+        - "{{ ssh_pub_key.content | b64decode }}"
+
+    - name: Test passwordless SSH access
+      local_action:
+        module: command
+        args:
+          cmd: ssh -o PasswordAuthentication=no -o BatchMode=yes -o ConnectTimeout=5 "{{ hostvars[inventory_hostname].ansible_host }}" echo success
+      register: result
+      ignore_errors: yes
+
+    - name: Fail if passwordless SSH access test failed
+      fail:
+        msg: "Passwordless SSH access setup failed for {{ inventory_hostname }}"
+      when: result.stdout != "success"
