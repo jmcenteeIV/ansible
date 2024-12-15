@@ -1,0 +1,101 @@
+- name: Update kubernetes nodes with linux modules for huge pages
+  hosts: kubernetes_nodes
+  vars:
+    ansible_user: admin
+  tasks:
+    - name: Update apt
+      ansible.builtin.apt:
+        update_cache: yes
+      become: yes
+    - name: Install linux-modules-extra using shell and nfs-common
+      shell: "apt install -y linux-modules-extra-`uname -r` && apt install -y nfs-common"
+      become: yes
+    - name: check if iscsi_tcp.conf exists in /etc/modules-load.d with line iscsi_tcp
+      ansible.builtin.stat:
+        path: /etc/modules-load.d/iscsi_tcp.conf
+      register: iscsi_tcp_conf
+    - name: Create iscsi_tcp.conf in /etc/modules-load.d
+      ansible.builtin.copy:
+        content: "iscsi_tcp"
+        dest: /etc/modules-load.d/iscsi_tcp.conf
+      when: iscsi_tcp_conf.stat.exists == False
+      become: yes
+    - name: check is nfs.conf exists in /etc/modules-load.d
+      ansible.builtin.stat:
+        path: /etc/modules-load.d/nfs.conf\
+      register: nfs_conf
+    - name: Create nfs.conf in /etc/modules-load.d
+      ansible.builtin.copy:
+        content: "nfs"
+        dest: /etc/modules-load.d/nfs.conf
+      when: nfs_conf.stat.exists == False
+      become: yes
+    - name: check if uio_pci_generic.conf exists in /etc/modules-load.d
+      ansible.builtin.stat:
+        path: /etc/modules-load.d/uio_pci_generic.conf
+      register: uio_pci_generic_conf
+    - name: Create uio_pci_generic.conf in /etc/modules-load.d
+      ansible.builtin.copy:
+        dest: /etc/modules-load.d/uio_pci_generic.conf
+      when: uio_pci_generic_conf.stat.exists == False
+      become: yes
+    - name: Reboot the system
+      ansible.builtin.reboot:
+      become: yes
+    - name: Wait for microk8s to be ready
+      shell: "microk8s status --wait-ready -t 180"
+      become: yes
+
+    
+    
+
+- name: Updates for longhorn in cluster
+  hosts: localhost
+  tasks:
+    - name: Configure huge pages
+      shell: "kubectl apply -f https://raw.githubusercontent.com/longhorn/longhorn/v1.7.0/deploy/prerequisite/longhorn-spdk-setup.yaml"
+
+- name: Update kubernetes nodes configuration for huge pages
+  hosts: kubernetes_nodes
+  vars:
+    ansible_user: admin
+  tasks:
+    - name: Edit huge pages configuration
+      shell: "echo 1024 > /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages"
+      become: yes
+    - name: Make huge pages configuration permanent
+      ansible.builtin.lineinfile:
+        path: /etc/sysctl.conf
+        line: 'vm.nr_hugepages=1024'
+        state: present
+      become: yes
+
+- name: load nvme-tcp
+  hosts: localhost
+  tasks:
+    - name: Configure huge pages
+      shell: "kubectl apply -f https://raw.githubusercontent.com/longhorn/longhorn/v1.7.0/deploy/prerequisite/longhorn-nvme-cli-installation.yaml"
+
+- name: Finish prerequisites setup for longhorn
+  hosts: kubernetes_nodes
+  vars:
+    ansible_user: admin
+  tasks:
+    - name: Restart microk8s
+      shell: "microk8s stop && microk8s start"
+      become: yes
+    - name: Wait for microk8s to be ready
+      shell: "microk8s status --wait-ready"
+      become: yes
+
+- name: make sure environment is ready for longhorn
+  hosts: localhost
+  tasks:
+    - name: Test environment is setup for longhorn
+      shell: 'bash -c "$(curl -sfL https://raw.githubusercontent.com/longhorn/longhorn/v1.7.0/scripts/environment_check.sh)" -s -s'
+      register: environment_check
+      failed_when: environment_check.stdout != ".*ERROR.*"
+    - name: print environment check
+      debug:
+        var: environment_check.stdout
+      ignore_errors: yes

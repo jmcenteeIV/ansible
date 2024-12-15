@@ -1,0 +1,23 @@
+- name: Get Join Command from Controller
+  hosts: controllers
+  vars:
+    ansible_user: admin
+  tasks:
+    - name: Get the controller Node join key
+      ansible.builtin.shell: "microk8s add-node --token-ttl 3600 | grep 'microk8s join.*--worker'"
+      register: join_cmd_output
+      become: yes
+    - name: Set fact to store output globally
+      ansible.builtin.set_fact:
+        join_cmd: "{{ join_cmd_output.stdout }}"
+      delegate_to: localhost
+
+
+- name: run the join command on the worker nodes
+  hosts: workers
+  vars:
+    ansible_user: admin
+  tasks:
+    - name: Join the workers to the controller
+      ansible.builtin.shell: "sleep 3 && {{ hostvars['pi-controller-01']['join_cmd'] }}"
+      become: yes

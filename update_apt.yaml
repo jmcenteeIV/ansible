@@ -1,0 +1,14 @@
+- name: Update hosts with latest packages
+  hosts: raspberry_pis
+  vars:
+    ansible_user: admin
+  tasks:
+    - name: Update all packages to their latest version
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+        update_cache: yes
+      when: ansible_os_family == "Debian"
+      become: yes
+
+    

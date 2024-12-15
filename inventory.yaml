@@ -1,0 +1,46 @@
+raspberry_pis:
+  children:
+    masters:
+    controllers:
+    workers:
+    pi-dns:
+    
+kubernetes_nodes:
+  children:
+    controllers:
+    workers:    
+
+masters:
+  hosts:
+    pi-master-01:
+      ansible_host: 192.168.50.101
+      message: "This is the master node"
+  vars:
+    ansible_user: admin
+    message: "This is a Raspberry Pi"
+
+controllers:
+  hosts:
+    pi-controller-01:
+      ansible_host: 192.168.50.100
+  vars:
+    ansible_user: admin
+    message: "This is a Raspberry Pi"
+
+workers:
+  hosts:
+    pi-worker-01:
+      ansible_host: 192.168.50.102
+    pi-worker-02:
+      ansible_host: 192.168.50.103
+  vars:
+    ansible_user: admin
+    message: "This is a Raspberry Pi"
+
+pi-dns:
+  hosts:
+    pi-dns:
+      ansible_host: 192.168.50.149
+  vars:
+    ansible_user: admin
+    message: "This is a Raspberry Pi"
