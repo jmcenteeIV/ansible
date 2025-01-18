@@ -1,3 +1,5 @@
 .vaultpass
 notes.txt
 log.txt
+auth
+backups/**
